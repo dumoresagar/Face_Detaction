@@ -1,0 +1,22 @@
+{
+  "name": "face-recognition-models",
+  "version": "0.0.0",
+  "description": "This repo contains the model files used by face-recognition.js, in order to easily install them via npm.",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/justadudewhohacks/face-recognition.js-models.git"
+  },
+  "keywords": [
+    "face",
+    "detection",
+    "recognition",
+    "model"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/justadudewhohacks/face-recognition.js-models/issues"
+  },
+  "homepage": "https://github.com/justadudewhohacks/face-recognition.js-models#readme"
+}
