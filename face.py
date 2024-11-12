@@ -279,32 +279,35 @@ def recognize():
 
         # For each detected face's embedding, find the best match in known embeddings
         for embedding in embeddings:
-            recognized_faces = []  # To store all recognized faces within threshold
+            recognized_user = None
+            min_distance = float("inf")
+            recognized_name = "lost"
+            recognized_client_id = None
 
+            # Compare the current face's embedding with known embeddings
             for db_user_id, known_embedding in known_embeddings.items():
                 distance = np.linalg.norm(embedding - known_embedding)
 
                 # Check if distance is below the threshold for recognition
-                if distance < 0.6:
+                if distance < 0.6 and distance < min_distance:
+                    min_distance = distance
+                    recognized_user = db_user_id  # Store the user ID for recognition
+
                     # Get user details from the database
                     cursor.execute('SELECT name, client_id FROM users WHERE user_id = ?', (db_user_id,))
                     user_info = cursor.fetchone()
 
                     if user_info:
-                        name, client_id = user_info
-                        recognized_faces.append({
-                            'user_id': db_user_id,
-                            'name': name,
-                            'client_id': client_id,
-                            'distance': distance
-                        })
+                        recognized_name, recognized_client_id = user_info
 
-            # If matches were found for the face, add them to the results
-            if recognized_faces:
-                results.append({
-                    'face_id': len(results) + 1,  # Identifier for each face in the image
-                    'matches': recognized_faces
-                })
+            # Add recognized face result to the list
+            results.append({
+                'face_id': len(results) + 1,  # Identifier for each face in the image
+                'user_id': recognized_user if recognized_user else None,
+                'name': recognized_name,
+                'client_id': recognized_client_id,
+                'distance': min_distance if recognized_user else 0.0
+            })
 
     # If no faces were recognized, return a message indicating so
     if not results:
