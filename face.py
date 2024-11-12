@@ -177,6 +177,72 @@ def delete_image():
         return jsonify({'error': 'Failed to delete image and embeddings'}), 500
 
 # API endpoint to recognize faces from a new image
+# @app.route('/recognize', methods=['POST'])
+# def recognize():
+#     if 'file' not in request.files:
+#         return jsonify({'error': 'No file part'}), 400
+
+#     file = request.files['file']
+#     if file.filename == '':
+#         return jsonify({'error': 'No selected file'}), 400
+
+#     # Save the uploaded image directly into the recognized_images folder
+#     image_path = os.path.join('recognized_images', f"{time.time()}.jpg")
+#     file.save(image_path)
+
+#     # Load the image
+#     image = cv2.imread(image_path)
+#     if image is None:
+#         return jsonify({'error': 'Could not load image'}), 400
+
+#     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+#     embeddings = get_face_embeddings(image_rgb)
+
+#     results = []  # To store recognized user details
+
+#     if not embeddings:
+#         return jsonify({'message': 'No faces detected in the image.'}), 200
+
+#     with sqlite3.connect('face_embeddings.db') as conn:
+#         cursor = conn.cursor()
+#         # Fetch all known embeddings from the database
+#         cursor.execute('SELECT user_id, embedding FROM embeddings')
+#         known_embeddings = {user_id: np.frombuffer(embedding, dtype=np.float32) for user_id, embedding in
+#                             cursor.fetchall()}
+
+#         for embedding in embeddings:
+#             min_distance = float("inf")
+#             recognized_user = None  # Variable to store recognized user info
+
+#             # Compare the current embedding with known embeddings
+#             for db_user_id, known_embedding in known_embeddings.items():
+#                 distance = np.linalg.norm(embedding - known_embedding)
+#                 if distance < min_distance:
+#                     min_distance = distance
+#                     recognized_user = db_user_id  # Store the user ID for recognition
+
+#             # Check if the minimum distance is below the threshold
+#             if min_distance < 0.6:  # Set your threshold for recognition
+#                 # Get user details from the database
+#                 cursor.execute('SELECT name, client_id FROM users WHERE user_id = ?', (recognized_user,))
+#                 user_info = cursor.fetchone()
+
+#                 if user_info:
+#                     name, client_id = user_info
+#                     results.append({
+#                         'user_id': recognized_user,
+#                         'name': name,
+#                         'client_id': client_id,
+#                         'distance': min_distance
+#                     })
+#                 else:
+#                     print(f"No user info found for user_id: {recognized_user}")
+
+#     if not results:
+#         return jsonify({'message': 'No faces recognized.'}), 200
+
+#     return jsonify({'results': results}), 200
+
 @app.route('/recognize', methods=['POST'])
 def recognize():
     if 'file' not in request.files:
@@ -198,50 +264,54 @@ def recognize():
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     embeddings = get_face_embeddings(image_rgb)
 
-    results = []  # To store recognized user details
-
     if not embeddings:
         return jsonify({'message': 'No faces detected in the image.'}), 200
 
+    results = []  # To store recognized results for each detected face
+
+    # Connect to the database
     with sqlite3.connect('face_embeddings.db') as conn:
         cursor = conn.cursor()
+        
         # Fetch all known embeddings from the database
         cursor.execute('SELECT user_id, embedding FROM embeddings')
-        known_embeddings = {user_id: np.frombuffer(embedding, dtype=np.float32) for user_id, embedding in
-                            cursor.fetchall()}
+        known_embeddings = {user_id: np.frombuffer(embedding, dtype=np.float32) for user_id, embedding in cursor.fetchall()}
 
+        # For each detected face's embedding, find the best match in known embeddings
         for embedding in embeddings:
-            min_distance = float("inf")
-            recognized_user = None  # Variable to store recognized user info
+            recognized_faces = []  # To store all recognized faces within threshold
 
-            # Compare the current embedding with known embeddings
             for db_user_id, known_embedding in known_embeddings.items():
                 distance = np.linalg.norm(embedding - known_embedding)
-                if distance < min_distance:
-                    min_distance = distance
-                    recognized_user = db_user_id  # Store the user ID for recognition
 
-            # Check if the minimum distance is below the threshold
-            if min_distance < 0.6:  # Set your threshold for recognition
-                # Get user details from the database
-                cursor.execute('SELECT name, client_id FROM users WHERE user_id = ?', (recognized_user,))
-                user_info = cursor.fetchone()
+                # Check if distance is below the threshold for recognition
+                if distance < 0.6:
+                    # Get user details from the database
+                    cursor.execute('SELECT name, client_id FROM users WHERE user_id = ?', (db_user_id,))
+                    user_info = cursor.fetchone()
 
-                if user_info:
-                    name, client_id = user_info
-                    results.append({
-                        'user_id': recognized_user,
-                        'name': name,
-                        'client_id': client_id,
-                        'distance': min_distance
-                    })
-                else:
-                    print(f"No user info found for user_id: {recognized_user}")
+                    if user_info:
+                        name, client_id = user_info
+                        recognized_faces.append({
+                            'user_id': db_user_id,
+                            'name': name,
+                            'client_id': client_id,
+                            'distance': distance
+                        })
 
+            # If matches were found for the face, add them to the results
+            if recognized_faces:
+                results.append({
+                    'face_id': len(results) + 1,  # Identifier for each face in the image
+                    'matches': recognized_faces
+                })
+
+    # If no faces were recognized, return a message indicating so
     if not results:
         return jsonify({'message': 'No faces recognized.'}), 200
 
     return jsonify({'results': results}), 200
 
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True,host='0.0.0.0',port=5001)
